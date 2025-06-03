@@ -24,7 +24,7 @@ def get_db_config():
     """
 
     # 加载.env文件
-    load_dotenv(r"D:\intelligent_checking_assistant\.env")
+    load_dotenv(r"D:\intelligent_checking_assistant\src\.env")
 
     config = {
         "host": os.getenv("MYSQL_HOST", "localhost"),
@@ -274,4 +274,3 @@ starlette_app = Starlette(
 
 if __name__ == "__main__":
     uvicorn.run(starlette_app, host="0.0.0.0", port=9000)
-
