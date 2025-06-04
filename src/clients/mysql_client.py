@@ -176,4 +176,4 @@ class MySQLClient:
 if __name__ == '__main__':
     mysql_client = MySQLClient()
     mysql_client.connect()
-    print(mysql_client.execute_query("select count(1) resu from  grpcon   where  gpolicyno between 200472556325167 and 200472556328407;"))
+    print(mysql_client.execute_query("select appno from  cn_water_yccd a where  appno  between '200472556325167' and '200472556328407' and optype not in('101','201') ;"))

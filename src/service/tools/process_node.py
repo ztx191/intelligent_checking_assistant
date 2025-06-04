@@ -1,7 +1,39 @@
+import json
+
 from src.clients.mysql_client import MySQLClient
 from mcp.types import TextContent
 class ProcessNode:
     client = MySQLClient()
+    with open(r"..\data_source\system_database.json", "r", encoding="utf-8") as f:
+        system_roster = json.load(f)
+
+    @classmethod
+    def query_summary(cls, description: str, arguments: dict):
+        """
+        总结泛化用户输入
+        :param description: 客户输入的问题主要描述、总结
+        :param arguments: 客户输入中提取的主要参数
+        :return:
+        """
+        return [TextContent(type="text", text=f"{description}，{arguments}")]
+
+
+
+    @classmethod
+    def get_problem_system_info(cls, system_name):
+        """
+        从用户输入中获取出问题的系统名称以及该系统包含的表数据信息
+        :param system_name: 系统名称
+        :return:
+        """
+        text_list = list()
+        for k, v in cls.system_roster[system_name].items():
+            text_list.append(f"{k}: {v}")
+        return [TextContent(type="text", text=f"出问题的系统名称为：{system_name}，" +
+                                              "该系统包含的表及表信息为：\n".format('\n'.join(text_list)))]
+
+
+
     @classmethod
     def check_id_occupation(cls, text: str) -> list[TextContent]:
         """
@@ -37,9 +69,13 @@ class ProcessNode:
         try:
             _res = cls.client.execute_query(sql)
             if  _res[0]['resu'] == 0:
-                return [TextContent(type="text", text=f"保单号{text}对应的保单类型为个单。界面选择个险保费批量结算功能")]
+                return [TextContent(type="text", text=f"保单号{text}对应的保单类型为个单。界面选择个险保费批量结算功能。"
+                                                      f"保费结算分个单和团单且个单团单对应不同的结算功能，您是否是在个单上结算？"
+                                    )]
             else:
-                return [TextContent(type="text", text=f"保单号{text}对应的保单类型为团单。界面选择团险保费批量结算功能。")]
+                return [TextContent(type="text", text=f"保单号{text}对应的保单类型为团单。界面选择团险保费批量结算功能。"
+                                                      f"保费结算分个单和团单且个单团单对应不同的结算功能，您是否在团单上结算？"
+                                    )]
         except Exception as e:
             return [TextContent(type="text", text=f"执行查询时出错: {str(e)}")]
 
@@ -60,12 +96,15 @@ class ProcessNode:
             _res = cls.client.execute_query(sql)
             count = abs(int(r) - int(l))
             if  _res[0]['resu'] == count:
-                return [TextContent(type="text", text=f"保单号{text}对应的保单已经全部结算。无需再结算。")]
+                return [TextContent(type="text", text=f"保单号{text}对应的保单已经全部结算，已结算不允许二次结算，所以无需再结算。")]
             else:
                 sql = f"""select appno from  cn_water_yccd a where  appno  between '{l}' and '{r}' and optype not in('101','201') ;"""
                 _res = cls.client.execute_query(sql)
-                policies = [i['appno'] for i in _res]
-                return [TextContent(type="text", text=f"保单号{text}对应的保单未全部结算。未结算的保单号为：{'，'.join(policies)}")]
+                if _res:
+                    policies = [i['appno'] for i in _res]
+                    return [TextContent(type="text", text=f"保单号{text}对应的保单未全部结算。未结算的保单号为：{'，'.join(policies)}")]
+                else:
+                    return [TextContent(type="text", text=f"保单号{text}对应的保单中无未结算保单。存在其他问题，等后续检查。")]
         except Exception as e:
             return [TextContent(type="text", text=f"执行查询时出错: {str(e)}")]
 
@@ -81,17 +120,24 @@ class ProcessNode:
             l, r = text.split(",")
         else:
             l, r = text, text
-        sql = f"""select count(1) resu from cn_water_yccd a where  appno  between '{l}' and '{r}' and optype='101';"""
+        sql = f"""select count(1) resu  from  cn_water_yccd a where  appno  between '{l}' and '{r}' and optype='201' and subamt>0;"""
         try:
             _res = cls.client.execute_query(sql)
             count = abs(int(r) - int(l))
             if _res[0]['resu'] == count:
-                return [TextContent(type="text", text=f"保单号{text}对应的保单已经全部结算。无需再结算。")]
+                return [TextContent(type="text", text=f"保单号{text}对应的保单已经全部撤单。已撤单的不在结算范围，所以无需再结算。")]
             else:
                 sql = f"""select appno from  cn_water_yccd a where  appno  between '{l}' and '{r}' and optype not in('101','201') ;"""
                 _res = cls.client.execute_query(sql)
-                policies = [i['appno'] for i in _res]
-                return [TextContent(type="text",
-                                    text=f"保单号{text}对应的保单未全部结算。未结算的保单号为：{'，'.join(policies)}")]
+                if _res:
+                    policies = [i['appno'] for i in _res]
+                    return [TextContent(type="text",
+                                        text=f"保单号{text}对应的保单未全部结算。未结算的保单号为：{'，'.join(policies)}")]
+                else:
+                    return [TextContent(type="text", text=f"保单号{text}对应的保单中无未结算保单。存在其他问题，等后续检查。")]
         except Exception as e:
             return [TextContent(type="text", text=f"执行查询时出错: {str(e)}")]
+
+    @classmethod
+    def judgment_policy_status_new(cls, text: str) -> list[TextContent]:
+        pass

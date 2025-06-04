@@ -1,0 +1,15 @@
+{
+  "科技个险": {
+    "batchread.t_customercenter_customer": {
+      "description": "客户信息表，包含创建的用户姓名、card_no、证件号、创建时间和更新时间"
+    }
+  },
+  "寿险2015版合作业务接入平台": {
+    "batchread.grpcon": {
+      "description": "团体客户保单信息的数据表格，包含保单号和该保单号对应的客户名称、保单类型等主要信息"
+    },
+    "batchread.cn_water_yccd": {
+      "description": "保单状态表，包含保单号和该保单号操作类型：101为以结算；201为已撤单、提交金额"
+    }
+  }
+}
