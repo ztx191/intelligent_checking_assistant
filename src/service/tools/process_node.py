@@ -8,31 +8,37 @@ class ProcessNode:
         system_roster = json.load(f)
 
     @classmethod
-    def query_summary(cls, description: str, arguments: dict):
+    def query_summary(cls, system_name: str, description: str, values: dict):
         """
-        总结泛化用户输入
-        :param description: 客户输入的问题主要描述、总结
-        :param arguments: 客户输入中提取的主要参数
+        从用户输入中提取报错系统名称、问题描述和相关字段信息，用于分析和处理系统报错问题
+        优化：能够重复调用直到获取正确字段，或者多次未获取到不再调用后续工具
+        :param system_name: 报错系统的名称，例如：'寿险合作业务接入平台'、'OA系统'等
+        :param description: 报错问题的主要描述，简明扼要地概括问题本质
+        :param values: 与报错相关的有用字段，包括但不限于保单号、产品名称、产品代码、业务员代码、网点代码、保费金额等。字段名保持原样(包括中文字段名)
         :return:
         """
-        return [TextContent(type="text", text=f"{description}，{arguments}")]
-
-
+        if not system_name:
+            return [TextContent(type="text", text="未发现报错系统名称，请输入出现问题的报错系统名称。")]
+        elif system_name not in list(cls.system_roster.keys()):
+            return [TextContent(type="text", text=f"系统名称：{system_name}未正确识别，请检查系统名称是否输入正确，或者该系统不在系统列表中。")]
+        else:
+            """
+            伪代码，查找描述是否能匹配已有sop，后续实现
+            if description like sops:
+                get sop
+                return [TextContent(type="text", text=f"报错系统为：{system_name}，请根据已有的{sop}方案进行检查")]
+            else:
+            """
+            text_list = list()
+            for k, v in cls.system_roster[system_name].items():
+                text_list.append(f"{k}: {v['description']}")
+            return [TextContent(type="text", text=f"报错系统为：{system_name}，问题描述为：{description}，问题涉及的相关字段为：{values}。"
+                                                  + "该系统涉及的可查询资源有：\n{}".format('\n'.join(text_list)))]
+        # return [TextContent(type="text", text=f"报错系统为：{system_name}，问题描述为：{description}，相关字段为：{values}")]
 
     @classmethod
-    def get_problem_system_info(cls, system_name):
-        """
-        从用户输入中获取出问题的系统名称以及该系统包含的表数据信息
-        :param system_name: 系统名称
-        :return:
-        """
-        text_list = list()
-        for k, v in cls.system_roster[system_name].items():
-            text_list.append(f"{k}: {v}")
-        return [TextContent(type="text", text=f"出问题的系统名称为：{system_name}，" +
-                                              "该系统包含的表及表信息为：\n".format('\n'.join(text_list)))]
-
-
+    def get_table_desc(cls, ):
+        pass
 
     @classmethod
     def check_id_occupation(cls, text: str) -> list[TextContent]:
@@ -137,7 +143,3 @@ class ProcessNode:
                     return [TextContent(type="text", text=f"保单号{text}对应的保单中无未结算保单。存在其他问题，等后续检查。")]
         except Exception as e:
             return [TextContent(type="text", text=f"执行查询时出错: {str(e)}")]
-
-    @classmethod
-    def judgment_policy_status_new(cls, text: str) -> list[TextContent]:
-        pass
