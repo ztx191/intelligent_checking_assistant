@@ -8,7 +8,7 @@ class ProcessNode:
         system_roster = json.load(f)
 
     @classmethod
-    def query_summary(cls, system_name: str, description: str, values: dict):
+    def query_summary(cls, system_name: str, description: str, values: dict) -> list[TextContent]:
         """
         从用户输入中提取报错系统名称、问题描述和相关字段信息，用于分析和处理系统报错问题
         优化：能够重复调用直到获取正确字段，或者多次未获取到不再调用后续工具
@@ -33,12 +33,40 @@ class ProcessNode:
             for k, v in cls.system_roster[system_name].items():
                 text_list.append(f"{k}: {v['description']}")
             return [TextContent(type="text", text=f"报错系统为：{system_name}，问题描述为：{description}，问题涉及的相关字段为：{values}。"
-                                                  + "该系统涉及的可查询资源有：\n{}".format('\n'.join(text_list)))]
+                                                  + "系统涉及的可查询资源有：\n{}".format('\n'.join(text_list)))]
         # return [TextContent(type="text", text=f"报错系统为：{system_name}，问题描述为：{description}，相关字段为：{values}")]
 
     @classmethod
-    def get_table_desc(cls, ):
-        pass
+    def get_table_desc(cls, table_name: str) -> list[TextContent]:
+        """
+        获取指定表的字段结构信息
+        :param table_name: 要查询的表的名称，需要查询的表名称来源于query_summary返回的系统涉及的可查询资源中的表名称。
+        :return:
+        """
+        sql = "SELECT TABLE_NAME, COLUMN_NAME, COLUMN_COMMENT "
+        sql += (
+            f"FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = '{cls.client.config.mysql_database}' "
+        )
+        sql += f"AND TABLE_NAME IN ('{table_name}') ORDER BY TABLE_NAME, ORDINAL_POSITION;"
+        _res = cls.client.execute_query(sql)
+        return [TextContent(type="text", text=f"表结构信息为：\n{json.dumps(_res['message'], ensure_ascii=False)}")]
+
+
+    @classmethod
+    def get_sql_database_resource(cls, sql: str, step: str) -> list[TextContent]:
+        """
+        根据表结构信息和用户问题，分析解决问题的步骤，并生成符合MySQL 8.0语法的SQL查询
+        :param sql: 符合MySQL 8.0语法的可执行SQL查询语句
+        :param step: 解决问题的详细分析步骤，包括思路和解决方案的逻辑推导过程
+        :return:
+        """
+        _res = cls.client.execute_query(sql)
+        if not _res["state"]:
+            return [TextContent(type="text", text=f"{_res['message']}")]
+        elif _res["state"] == "error":
+            return [TextContent(type="text", text=f"{_res['message']}")]
+        else:
+            return [TextContent(type="text", text=f"根据步骤：{step}，生成的SQL查询语句为：{sql}，查询结果为：\n{_res['message']}")]
 
     @classmethod
     def check_id_occupation(cls, text: str) -> list[TextContent]:

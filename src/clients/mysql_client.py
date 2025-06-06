@@ -89,12 +89,39 @@ class MySQLClient:
             return results
         return [self._process_row(row) for row in results]
 
-    def execute_query(self, sql: str, params: Union[Dict, List, Tuple] = None) -> List[Dict[str, Any]]:
+    def execute_query(self, sql: str, params: Union[Dict, List, Tuple] = None):
         """执行查询SQL语句并返回格式化后的结果"""
-        with self.get_cursor() as cursor:
-            cursor.execute(sql, params)
-            results = cursor.fetchall()
-            return self._process_results(results)
+        try:
+            with self.get_cursor() as cursor:
+                cursor.execute(sql, params)
+                results = cursor.fetchall()
+                if not results:
+                    return {"state": None, "message": "查询结果为空"}
+                else:
+                    processed_results = self._process_results(results)
+                    keys = list(results[0].keys())
+                    csv_content = ",".join(keys) + "\n"
+                    for row in processed_results:
+                        row_values = []
+                        for key in keys:
+                            value = row.get(key)
+                            if value is None:
+                                value = "NULL"  # 特殊处理None值
+                            elif isinstance(value, str):
+                                # 如果字符串中包含逗号，转换为中文逗号
+                                if ',' in value:
+                                    value = value.replace(',', '，')
+                            else:
+                                value = str(value)
+                            row_values.append(value)
+                        csv_content += ','.join(row_values) + '\n'
+
+                    return {"state": "success", "message": csv_content}
+
+        except  pymysql.Error as e:
+            return {"state": "error", "message": f"执行SQL语句失败: {e}"}
+
+            # return self._process_results(results)
 
     def execute_one(self, sql: str, params: Union[Dict, List, Tuple] = None) -> Optional[Dict[str, Any]]:
         """执行查询SQL语句并返回格式化后的单条结果"""
@@ -176,4 +203,4 @@ class MySQLClient:
 if __name__ == '__main__':
     mysql_client = MySQLClient()
     mysql_client.connect()
-    print(mysql_client.execute_query("select appno from  cn_water_yccd a where  appno  between '200472556325167' and '200472556328407' and optype not in('101','201') ;"))
+    print(mysql_client.execute_one("select appno, opdate from  cn_water_yccd a where  appno  between '200472556325167' and '200472556328407' and optype in('101','201') ;"))

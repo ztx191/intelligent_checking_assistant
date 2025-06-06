@@ -20,12 +20,37 @@ async def list_tools() -> list[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "system_name": {"type": "string", "description": "报错系统的名称，例如：'寿险合作业务接入平台'、'OA系统'等"},
+                    "system_name": {"type": "string",
+                                    "description": "报错系统的名称，例如：'寿险合作业务接入平台'、'OA系统'等"},
                     "description": {"type": "string", "description": "报错问题的主要描述，简明扼要地概括问题本质"},
-                    "values": {"type": "object", "description": "与报错相关的有用字段，包括但不限于保单号、产品名称、产品代码、业务员代码、网点代码、保费金额等。字段名保持原样(包括中文字段名)"}
+                    "values": {"type": "object",
+                               "description": "与报错相关的有用字段，包括但不限于保单号、产品名称、产品代码、业务员代码、网点代码、保费金额等。字段名保持原样(包括中文字段名)。对于表示范围的字段（如'保单号：200472556325167-200472556328407'），应拆分为两个字段，例如'保单号Begin'和'保单号End'（如'保单号Begin: 200472556325167'和'保单号End: 200472556328407'）。检测任何使用连字符、至、到等表示范围的值并进行适当拆分。"}
                 },
-                "required": ["system_name", "description", "values"],
+                "required": ["system_name", "description", "values"]
             }
+        ),
+        Tool(
+            name="get_table_desc",
+            description="获取指定表的字段结构信息",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "table_name": {"type": "string", "description": "要查询的表的名称，需要查询的表名称来源于query_summary返回的系统涉及的可查询资源中的表名称。"}
+                },
+                "required": ["table_name"]
+            },
+        ),
+        Tool(
+            name="get_sql_database_resource",
+            description="根据工具get_table_desc获取的表字段信息和用户问题，分析解决问题的步骤，并生成符合MySQL 8.0语法的SQL查询",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "step": {"type": "string", "description": "解决问题的详细分析步骤，包括思路和解决方案的逻辑推导过程"},
+                    "sql": {"type": "string", "description": "符合MySQL 8.0语法的可执行SQL查询语句"}
+                },
+                "required": ["step"]
+            },
         )
     ]
 
@@ -39,6 +64,17 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         if not description and not values:
             raise ValueError("缺少输入语句")
         return ProcessNode().query_summary(system_name, description, values)
+    elif name == "get_table_desc":
+        table_name = arguments.get("table_name")
+        if not table_name:
+            raise ValueError("缺少表名称")
+        return ProcessNode.get_table_desc(table_name)
+    elif name == "get_sql_database_resource":
+        step = arguments.get("step")
+        sql = arguments.get("sql")
+        if not step and not sql:
+            raise ValueError("缺少输入语句")
+        return ProcessNode.get_sql_database_resource(sql, step)
     else:
         raise ValueError(f"未知的工具: {name}")
 
