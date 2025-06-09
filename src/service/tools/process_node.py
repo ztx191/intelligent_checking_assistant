@@ -1,9 +1,14 @@
 import json
-
+from src.clients.llm_client import LLMService
 from src.clients.mysql_client import MySQLClient
 from mcp.types import TextContent
+
+from src.prompts.sop import SYSTEM_PROMPT
+
+
 class ProcessNode:
     client = MySQLClient()
+    llm_client = LLMService()
     with open(r"..\data_source\system_database.json", "r", encoding="utf-8") as f:
         system_roster = json.load(f)
 
@@ -22,19 +27,31 @@ class ProcessNode:
         elif system_name not in list(cls.system_roster.keys()):
             return [TextContent(type="text", text=f"系统名称：{system_name}未正确识别，请检查系统名称是否输入正确，或者该系统不在系统列表中。")]
         else:
-            """
-            伪代码，查找描述是否能匹配已有sop，后续实现
-            if description like sops:
-                get sop
-                return [TextContent(type="text", text=f"报错系统为：{system_name}，请根据已有的{sop}方案进行检查")]
-            else:
-            """
             text_list = list()
             for k, v in cls.system_roster[system_name].items():
                 text_list.append(f"{k}: {v['description']}")
             return [TextContent(type="text", text=f"报错系统为：{system_name}，问题描述为：{description}，问题涉及的相关字段为：{values}。"
                                                   + "系统涉及的可查询资源有：\n{}".format('\n'.join(text_list)))]
-        # return [TextContent(type="text", text=f"报错系统为：{system_name}，问题描述为：{description}，相关字段为：{values}")]
+
+    @classmethod
+    def matching_pipeline(cls, problem: str) -> list[TextContent]:
+        """
+        根据用户的问题描述获取对应的解决该问题的方案
+        :param problem: 用户的问题描述
+        :return:
+        """
+        query = f"问题描述为：{problem}"
+        _res = cls.llm_client.chat(SYSTEM_PROMPT, query)
+        # _res = json.loads(_res)
+        pipeline = _res
+        return [TextContent(type="text", text=f"根据问题描述获取的相关方案为：\n{pipeline}\n根据上面提到的方案，检查系统资源")]
+
+
+    @classmethod
+    def get_logging_info(cls, logging_name: str) -> list[TextContent]:
+        pass
+
+
 
     @classmethod
     def get_table_desc(cls, table_name: str) -> list[TextContent]:
@@ -60,14 +77,30 @@ class ProcessNode:
         :param step: 解决问题的详细分析步骤，包括思路和解决方案的逻辑推导过程
         :return:
         """
-        _res = cls.client.execute_query(sql)
-        if not _res["state"]:
-            return [TextContent(type="text", text=f"{_res['message']}")]
-        elif _res["state"] == "error":
-            return [TextContent(type="text", text=f"{_res['message']}")]
-        else:
-            return [TextContent(type="text", text=f"根据步骤：{step}，生成的SQL查询语句为：{sql}，查询结果为：\n{_res['message']}")]
+        statements = [stmt.strip() for stmt in sql.split(";") if stmt.strip()]
+        results = []
+        for statement in statements:
+            _res = cls.client.execute_query(statement)
+            results.append(f"{statement}的执行结果为：{_res['message']}")
+        results = "\n".join(results)
+        return [TextContent(type="text", text=f"步骤{step}的SQL结果为：\n{results}")]
 
+    @classmethod
+    def finally_summary(cls, problem: str, reason: str, step: str, solution: str) -> list[TextContent]:
+        """
+        汇总
+        :param problem: 问题
+        :param reason: 原因
+        :param step: 步骤
+        :param solution: 解决方方案
+        :return:
+        """
+        res = f"""
+        | 问题现象 | 原因分析 | 解决步骤 | 解决方案 |
+        |:-------:|:-------:|:-------:|:-------:|
+        | {problem} | {reason} | {step} | {solution}|
+        """
+        return [TextContent(type="text", text=res)]
     @classmethod
     def check_id_occupation(cls, text: str) -> list[TextContent]:
         """

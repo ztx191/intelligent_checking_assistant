@@ -1,13 +1,26 @@
 import os
 import pymysql
+import sqlparse
 from pydantic import BaseModel
 import datetime
 from dotenv import load_dotenv
 from typing import Optional, List, Dict, Any, Union, Tuple
 from contextlib import contextmanager
 
-
 load_dotenv("../.env")
+
+def get_sql_operation_with_sqlparse(sql: str) -> str:
+    """使用sqlparse获取SQL语句的操作类型"""
+    try:
+        parsed = sqlparse.parse(sql)[0]
+        for token in parsed.tokens:
+            if token.ttype is sqlparse.tokens.Keyword:
+                return str(token).upper()
+        return "UNKNOWN"
+    except:
+        return "UNKNOWN"
+
+
 
 
 class MySQLModel(BaseModel):
@@ -203,4 +216,4 @@ class MySQLClient:
 if __name__ == '__main__':
     mysql_client = MySQLClient()
     mysql_client.connect()
-    print(mysql_client.execute_one("select appno, opdate from  cn_water_yccd a where  appno  between '200472556325167' and '200472556328407' and optype in('101','201') ;"))
+    print(mysql_client.execute_query("select appno, opdate from  cn_water_yccd a where  appno  between '200472556325167' and '200472556328407' and optype in('101','201') ;"))
