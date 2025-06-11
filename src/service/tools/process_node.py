@@ -1,7 +1,9 @@
 import json
+from typing import Optional
 from src.clients.llm_client import LLMService
 from src.clients.mysql_client import MySQLClient
 from mcp.types import TextContent
+
 
 from src.prompts.sop import SYSTEM_PROMPT
 
@@ -30,22 +32,43 @@ class ProcessNode:
             text_list = list()
             for k, v in cls.system_roster[system_name].items():
                 text_list.append(f"{k}: {v['description']}")
-            return [TextContent(type="text", text=f"报错系统为：{system_name}，问题描述为：{description}，问题涉及的相关字段为：{values}。"
-                                                  + "系统涉及的可查询资源有：\n{}".format('\n'.join(text_list)))]
+            text_list  = '\n'.join(text_list)
+            return [TextContent(type="text", text=f"报错系统为：{system_name}，问题描述为：{description}，问题涉及的相关字段为：{values}。" +
+                                                  f"系统包含的资源为：{text_list}")]
 
     @classmethod
-    def matching_pipeline(cls, problem: str) -> list[TextContent]:
+    def summary_pipeline(cls, problem: str) -> list[TextContent]:
         """
-        根据用户的问题描述获取对应的解决该问题的方案
+        根据用户的问题描述检索已有的sop生成解决用户问题的pipeline
         :param problem: 用户的问题描述
-        :return:
         """
         query = f"问题描述为：{problem}"
         _res = cls.llm_client.chat(SYSTEM_PROMPT, query)
         # _res = json.loads(_res)
         pipeline = _res
-        return [TextContent(type="text", text=f"根据问题描述获取的相关方案为：\n{pipeline}\n根据上面提到的方案，检查系统资源")]
+        return [TextContent(type="text", text=f"根据问题描述获取的可以参考的内容为：\n{pipeline}。\n参考获取内容，总结解决步骤，调用工具。" +
+                                              "注意：不用返回该工具的结果！")]
 
+    @classmethod
+    def dismantle_step(cls, step) -> list[TextContent]:
+        """
+        从上下文中提取解决问题的步骤
+        :param step: 解决问题的步骤
+        :return:
+        """
+        return [TextContent(type="text", text=f"根据问题描述获取的详细步骤为：\n{step}\n根据上面提到的步骤，调用可以使用的工具。" +
+                            "注意：输出该工具结果")]
+
+    @classmethod
+    def load_system(cls, url: str, operate: str, values: dict):
+        """
+        有关浏览器进入系统，系统相关操作
+        :param operate: 操作
+        :param url: url
+        :param values: 相关参数
+        :return:
+        """
+        return [TextContent(type="text", text=f"进入系统成功，开始进行下一步操作")]
 
     @classmethod
     def get_logging_info(cls, logging_name: str) -> list[TextContent]:
@@ -70,11 +93,10 @@ class ProcessNode:
 
 
     @classmethod
-    def get_sql_database_resource(cls, sql: str, step: str) -> list[TextContent]:
+    def get_sql_database_resource(cls, sql: str) -> list[TextContent]:
         """
         根据表结构信息和用户问题，分析解决问题的步骤，并生成符合MySQL 8.0语法的SQL查询
         :param sql: 符合MySQL 8.0语法的可执行SQL查询语句
-        :param step: 解决问题的详细分析步骤，包括思路和解决方案的逻辑推导过程
         :return:
         """
         statements = [stmt.strip() for stmt in sql.split(";") if stmt.strip()]
@@ -83,23 +105,31 @@ class ProcessNode:
             _res = cls.client.execute_query(statement)
             results.append(f"{statement}的执行结果为：{_res['message']}")
         results = "\n".join(results)
-        return [TextContent(type="text", text=f"步骤{step}的SQL结果为：\n{results}")]
+        return [TextContent(type="text", text=f"SQL结果执行为：\n{results}")]
 
     @classmethod
-    def finally_summary(cls, problem: str, reason: str, step: str, solution: str) -> list[TextContent]:
+    def finally_summary(cls, problem: str, reason: str, step: str, solution: str, rules: Optional[str]) -> list[TextContent]:
         """
         汇总
         :param problem: 问题
         :param reason: 原因
         :param step: 步骤
         :param solution: 解决方方案
+        :param rules: 系统规则
         :return:
         """
-        res = f"""
-        | 问题现象 | 原因分析 | 解决步骤 | 解决方案 |
-        |:-------:|:-------:|:-------:|:-------:|
-        | {problem} | {reason} | {step} | {solution}|
-        """
+        if rules:
+            res = f"""
+            | 问题现象 | 原因分析 | 解决步骤 | 解决方案 | 系统规则 |
+            |:-------:|:-------:|:-------:|:-------:|:-------:|
+            | {problem} | {reason} | {step} | {solution} | {solution} |
+            """
+        else:
+            res = f"""
+            | 问题现象 | 原因分析 | 解决步骤 | 解决方案 |
+            |:-------:|:-------:|:-------:|:-------:|
+            | {problem} | {reason} | {step} | {solution} |
+            """
         return [TextContent(type="text", text=res)]
     @classmethod
     def check_id_occupation(cls, text: str) -> list[TextContent]:
